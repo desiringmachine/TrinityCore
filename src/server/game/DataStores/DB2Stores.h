@@ -307,10 +307,7 @@ public:
         int32 PushID = 0;
         uint32 UniqueID = 0;
 
-        friend bool operator<(HotfixId const& left, HotfixId const& right)
-        {
-            return std::tie(left.PushID, left.UniqueID) < std::tie(right.PushID, right.UniqueID);
-        }
+        friend std::strong_ordering operator<=>(HotfixId const& left, HotfixId const& right) = default;
     };
 
     struct HotfixRecord
@@ -329,13 +326,13 @@ public:
         HotfixId ID;
         Status HotfixStatus = Status::Invalid;
 
-        friend bool operator<(HotfixRecord const& left, HotfixRecord const& right)
+        friend std::strong_ordering operator<=>(HotfixRecord const& left, HotfixRecord const& right)
         {
-            if (std::strong_ordering cmp = left.ID <=> right.ID; advstd::is_neq(cmp))
+            if (auto cmp = left.ID <=> right.ID; std::is_neq(cmp))
                 return cmp;
-            if (std::strong_ordering cmp = left.TableHash <=> right.TableHash; advstd::is_neq(cmp))
+            if (auto cmp = left.TableHash <=> right.TableHash; std::is_neq(cmp))
                 return cmp;
-            if (std::strong_ordering cmp = left.RecordID <=> right.RecordID; advstd::is_neq(cmp))
+            if (auto cmp = left.RecordID <=> right.RecordID; std::is_neq(cmp))
                 return cmp;
             return std::strong_ordering::equal;
         }
