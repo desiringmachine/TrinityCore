@@ -20,6 +20,8 @@
 
 #include "Define.h"
 #include "EnumFlag.h"
+#include "advstd.h"
+#include <array>
 #include <functional>
 #include <list>
 #include <set>
@@ -333,12 +335,11 @@ class TC_GAME_API ObjectGuid
         bool operator!= (ObjectGuid const& guid) const { return !(*this == guid); }
         bool operator< (ObjectGuid const& guid) const
         {
-            if (_data[1] < guid._data[1])
-                return true;
-            else if (_data[1] > guid._data[1])
-                return false;
-
-            return _data[0] < guid._data[0];
+            if (std::strong_ordering cmp = _data[1] <=> right._data[1]; advstd::is_neq(cmp))
+                return cmp;
+            if (std::strong_ordering cmp = _data[0] <=> right._data[0]; advstd::is_neq(cmp))
+                return cmp;
+            return std::strong_ordering::equal;
         }
 
         static char const* GetTypeName(HighGuid high);

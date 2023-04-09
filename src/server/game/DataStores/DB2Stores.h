@@ -22,6 +22,7 @@
 #include "DB2Structure.h"
 #include "Optional.h"
 #include "SharedDefines.h"
+#include "advstd.h"
 #include <map>
 #include <set>
 #include <vector>
@@ -329,7 +330,13 @@ public:
 
         friend bool operator<(HotfixRecord const& left, HotfixRecord const& right)
         {
-            return std::tie(left.ID, left.TableHash, left.RecordID) < std::tie(right.ID, right.TableHash, right.RecordID);
+            if (std::strong_ordering cmp = left.ID <=> right.ID; advstd::is_neq(cmp))
+                return cmp;
+            if (std::strong_ordering cmp = left.TableHash <=> right.TableHash; advstd::is_neq(cmp))
+                return cmp;
+            if (std::strong_ordering cmp = left.RecordID <=> right.RecordID; advstd::is_neq(cmp))
+                return cmp;
+            return std::strong_ordering::equal;
         }
     };
 
