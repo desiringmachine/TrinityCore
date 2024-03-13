@@ -19,8 +19,9 @@
 #define __TRINITY_VEHICLE_H
 
 #include "Object.h"
-#include "VehicleDefines.h"
+#include "UniqueTrackablePtr.h"
 #include "Unit.h"
+#include "VehicleDefines.h"
 #include <list>
 
 struct VehicleEntry;
@@ -76,6 +77,8 @@ class TC_GAME_API Vehicle : public TransportBase
         Milliseconds GetDespawnDelay();
 
         std::string GetDebugInfo() const;
+
+        Trinity::unique_weak_ptr<Vehicle> GetWeakPtr() const;
 
     protected:
         friend class VehicleJoinEvent;
