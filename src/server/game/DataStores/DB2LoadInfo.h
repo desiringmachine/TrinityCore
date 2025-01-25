@@ -5163,6 +5163,22 @@ struct SpecSetMemberLoadInfo
     }
 };
 
+struct SpellLoadInfo
+{
+    static DB2LoadInfo const* Instance()
+    {
+        static constexpr DB2FieldMeta fields[] =
+        {
+            { false, FT_INT, "ID" },
+            { false, FT_STRING, "NameSubtext" },
+            { false, FT_STRING, "Description" },
+            { false, FT_STRING, "AuraDescription" },
+        };
+        static DB2LoadInfo const loadInfo(&fields[0], std::size(fields), SpellMeta::Instance(), HOTFIX_SEL_SPELL);
+        return &loadInfo;
+    }
+};
+
 struct SpellAuraOptionsLoadInfo
 {
     static DB2LoadInfo const* Instance()

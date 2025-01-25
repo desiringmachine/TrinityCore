@@ -3219,6 +3219,14 @@ struct SpecSetMemberEntry
     uint32 SpecSetID;
 };
 
+struct SpellEntry
+{
+    uint32 Id;
+    LocalizedString NameSubtext_lang;
+    LocalizedString Description_lang;
+    LocalizedString AuraDescription_lang;
+};
+
 struct SpellAuraOptionsEntry
 {
     uint32 ID;
