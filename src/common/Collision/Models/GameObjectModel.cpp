@@ -50,7 +50,7 @@ void LoadGameObjectModelList(std::string const& dataPath)
     if (!model_list_file)
     {
         TC_LOG_ERROR("misc", "Unable to open '{}' file.", VMAP::GAMEOBJECT_MODELS);
-        return false;
+        return;
     }
 
     char magic[8];
@@ -58,7 +58,7 @@ void LoadGameObjectModelList(std::string const& dataPath)
         || memcmp(magic, VMAP::VMAP_MAGIC, 8) != 0)
     {
         TC_LOG_ERROR("misc", "File '{}' has wrong header, expected {}.", VMAP::GAMEOBJECT_MODELS, VMAP::VMAP_MAGIC);
-        return false;
+        return;
     }
 
     uint32 name_length, displayId;
@@ -92,7 +92,7 @@ void LoadGameObjectModelList(std::string const& dataPath)
     }
 
     TC_LOG_INFO("server.loading", ">> Loaded {} GameObject models in {} ms", uint32(model_list.size()), GetMSTimeDiffToNow(oldMSTime));
-    return true;
+    return;
 }
 
 GameObjectModel::~GameObjectModel()
