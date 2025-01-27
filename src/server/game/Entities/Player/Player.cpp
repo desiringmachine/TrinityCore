@@ -585,7 +585,7 @@ bool Player::Create(ObjectGuid::LowType guidlow, WorldPackets::Character::Charac
 bool Player::StoreNewItemInBestSlots(uint32 titem_id, uint32 titem_amount)
 {
     TC_LOG_DEBUG("entities.player.items", "Player::StoreNewItemInBestSlots: Player '{}' ({}) creates initial item (ItemID: {}, Count: {})",
-        GetName(), GetGUID().ToString(), itemId, amount);
+        GetName(), GetGUID().ToString(), titem_id, titem_amount);
 
     ItemContext itemContext = ItemContext::New_Character;
     std::vector<int32> bonusListIDs;
@@ -621,7 +621,7 @@ bool Player::StoreNewItemInBestSlots(uint32 titem_id, uint32 titem_amount)
 
     // item can't be added
     TC_LOG_ERROR("entities.player.items", "Player::StoreNewItemInBestSlots: Player '{}' ({}) can't equip or store initial item (ItemID: {}, Race: {}, Class: {}, InventoryResult: {})",
-        GetName(), GetGUID().ToString(), itemId, GetRace(), GetClass(), msg);
+        GetName(), GetGUID().ToString(), titem_id, GetRace(), GetClass(), msg);
     return false;
 }
 
@@ -1811,13 +1811,6 @@ void Player::Regenerate(Powers power)
         RATE_POWER_ARCANE_CHARGES,
         RATE_POWER_FURY,
         RATE_POWER_PAIN,
-        RATE_POWER_ESSENCE,
-        MAX_RATES, // runes
-        MAX_RATES, // runes
-        MAX_RATES, // runes
-        MAX_RATES, // alternate
-        MAX_RATES, // alternate
-        MAX_RATES, // alternate
     };
 
     if (RatesForPower[power] != MAX_RATES)
