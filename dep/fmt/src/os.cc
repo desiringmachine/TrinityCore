@@ -25,24 +25,21 @@
 #      define WIN32_LEAN_AND_MEAN
 #    endif
 #    include <io.h>
+#    include <windows.h>
+
+#    define O_CREAT _O_CREAT
+#    define O_TRUNC _O_TRUNC
 
 #    ifndef S_IRUSR
 #      define S_IRUSR _S_IREAD
 #    endif
+
 #    ifndef S_IWUSR
 #      define S_IWUSR _S_IWRITE
 #    endif
-#    ifndef S_IRGRP
-#      define S_IRGRP 0
-#    endif
-#    ifndef S_IWGRP
-#      define S_IWGRP 0
-#    endif
-#    ifndef S_IROTH
-#      define S_IROTH 0
-#    endif
-#    ifndef S_IWOTH
-#      define S_IWOTH 0
+
+#    ifdef __MINGW32__
+#      define _SH_DENYNO 0x40
 #    endif
 #  endif  // _WIN32
 #endif    // FMT_USE_FCNTL
@@ -51,10 +48,14 @@
 #  include <windows.h>
 #endif
 
+#ifdef fileno
+#  undef fileno
+#endif
+
 namespace {
 #ifdef _WIN32
 // Return type of read and write functions.
-using rwresult = int;
+using RWResult = int;
 
 // On Windows the count argument to read and write is unsigned, so convert
 // it from size_t preventing integer overflow.
@@ -63,7 +64,7 @@ inline unsigned convert_rwcount(std::size_t count) {
 }
 #elif FMT_USE_FCNTL
 // Return type of read and write functions.
-using rwresult = ssize_t;
+using RWResult = ssize_t;
 
 inline std::size_t convert_rwcount(std::size_t count) { return count; }
 #endif
@@ -72,14 +73,14 @@ inline std::size_t convert_rwcount(std::size_t count) { return count; }
 FMT_BEGIN_NAMESPACE
 
 #ifdef _WIN32
-detail::utf16_to_utf8::utf16_to_utf8(basic_string_view<wchar_t> s) {
+detail::utf16_to_utf8::utf16_to_utf8(wstring_view s) {
   if (int error_code = convert(s)) {
     FMT_THROW(windows_error(error_code,
                             "cannot convert string from UTF-16 to UTF-8"));
   }
 }
 
-int detail::utf16_to_utf8::convert(basic_string_view<wchar_t> s) {
+int detail::utf16_to_utf8::convert(wstring_view s) {
   if (s.size() > INT_MAX) return ERROR_INVALID_PARAMETER;
   int s_size = static_cast<int>(s.size());
   if (s_size == 0) {
@@ -100,90 +101,51 @@ int detail::utf16_to_utf8::convert(basic_string_view<wchar_t> s) {
   return 0;
 }
 
-namespace detail {
-
-class system_message {
-  system_message(const system_message&) = delete;
-  void operator=(const system_message&) = delete;
-
-  unsigned long result_;
-  wchar_t* message_;
-
-  static bool is_whitespace(wchar_t c) noexcept {
-    return c == L' ' || c == L'\n' || c == L'\r' || c == L'\t' || c == L'\0';
-  }
-
- public:
-  explicit system_message(unsigned long error_code)
-      : result_(0), message_(nullptr) {
-    result_ = FormatMessageW(
-        FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM |
-            FORMAT_MESSAGE_IGNORE_INSERTS,
-        nullptr, error_code, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
-        reinterpret_cast<wchar_t*>(&message_), 0, nullptr);
-    if (result_ != 0) {
-      while (result_ != 0 && is_whitespace(message_[result_ - 1])) {
-        --result_;
-      }
-    }
-  }
-  ~system_message() { LocalFree(message_); }
-  explicit operator bool() const noexcept { return result_ != 0; }
-  operator basic_string_view<wchar_t>() const noexcept {
-    return basic_string_view<wchar_t>(message_, result_);
-  }
-};
-
-class utf8_system_category final : public std::error_category {
- public:
-  const char* name() const noexcept override { return "system"; }
-  std::string message(int error_code) const override {
-    system_message msg(error_code);
-    if (msg) {
-      utf16_to_utf8 utf8_message;
-      if (utf8_message.convert(msg) == ERROR_SUCCESS) {
-        return utf8_message.str();
-      }
-    }
-    return "unknown error";
-  }
-};
-
-}  // namespace detail
-
-FMT_API const std::error_category& system_category() noexcept {
-  static const detail::utf8_system_category category;
-  return category;
-}
-
-std::system_error vwindows_error(int err_code, string_view format_str,
-                                 format_args args) {
-  auto ec = std::error_code(err_code, system_category());
-  return std::system_error(ec, vformat(format_str, args));
+void windows_error::init(int err_code, string_view format_str,
+                         format_args args) {
+  error_code_ = err_code;
+  memory_buffer buffer;
+  detail::format_windows_error(buffer, err_code, vformat(format_str, args));
+  std::runtime_error& base = *this;
+  base = std::runtime_error(to_string(buffer));
 }
 
 void detail::format_windows_error(detail::buffer<char>& out, int error_code,
-                                  const char* message) noexcept {
+                                  string_view message) FMT_NOEXCEPT {
   FMT_TRY {
-    system_message msg(error_code);
-    if (msg) {
-      utf16_to_utf8 utf8_message;
-      if (utf8_message.convert(msg) == ERROR_SUCCESS) {
-        fmt::format_to(buffer_appender<char>(out), "{}: {}", message, utf8_message);
-        return;
+    wmemory_buffer buf;
+    buf.resize(inline_buffer_size);
+    for (;;) {
+      wchar_t* system_message = &buf[0];
+      int result = FormatMessageW(
+          FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS, nullptr,
+          error_code, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), system_message,
+          static_cast<uint32_t>(buf.size()), nullptr);
+      if (result != 0) {
+        utf16_to_utf8 utf8_message;
+        if (utf8_message.convert(system_message) == ERROR_SUCCESS) {
+          format_to(buffer_appender<char>(out), "{}: {}", message,
+                    utf8_message);
+          return;
+        }
+        break;
       }
+      if (GetLastError() != ERROR_INSUFFICIENT_BUFFER)
+        break;  // Can't get error message, report error code instead.
+      buf.resize(buf.size() * 2);
     }
   }
   FMT_CATCH(...) {}
   format_error_code(out, error_code, message);
 }
 
-void report_windows_error(int error_code, const char* message) noexcept {
+void report_windows_error(int error_code,
+                          fmt::string_view message) FMT_NOEXCEPT {
   report_error(detail::format_windows_error, error_code, message);
 }
 #endif  // _WIN32
 
-buffered_file::~buffered_file() noexcept {
+buffered_file::~buffered_file() FMT_NOEXCEPT {
   if (file_ && FMT_SYSTEM(fclose(file_)) != 0)
     report_system_error(errno, "cannot close file");
 }
@@ -202,19 +164,18 @@ void buffered_file::close() {
   if (result != 0) FMT_THROW(system_error(errno, "cannot close file"));
 }
 
-int buffered_file::descriptor() const {
-  int fd = FMT_POSIX_CALL(fileno(file_));
+// A macro used to prevent expansion of fileno on broken versions of MinGW.
+#define FMT_ARGS
+
+int buffered_file::fileno() const {
+  int fd = FMT_POSIX_CALL(fileno FMT_ARGS(file_));
   if (fd == -1) FMT_THROW(system_error(errno, "cannot get file descriptor"));
   return fd;
 }
 
 #if FMT_USE_FCNTL
 file::file(cstring_view path, int oflag) {
-#  ifdef _WIN32
-  using mode_t = int;
-#  endif
-  constexpr mode_t mode =
-      S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH;
+  int mode = S_IRUSR | S_IWUSR;
 #  if defined(_WIN32) && !defined(__MINGW32__)
   fd_ = -1;
   FMT_POSIX_CALL(sopen_s(&fd_, path.c_str(), oflag, _SH_DENYNO, mode));
@@ -225,7 +186,7 @@ file::file(cstring_view path, int oflag) {
     FMT_THROW(system_error(errno, "cannot open file {}", path.c_str()));
 }
 
-file::~file() noexcept {
+file::~file() FMT_NOEXCEPT {
   // Don't retry close in case of EINTR!
   // See http://linux.derkeiler.com/Mailing-Lists/Kernel/2005-09/3000.html
   if (fd_ != -1 && FMT_POSIX_CALL(close(fd_)) != 0)
@@ -268,14 +229,14 @@ long long file::size() const {
 }
 
 std::size_t file::read(void* buffer, std::size_t count) {
-  rwresult result = 0;
+  RWResult result = 0;
   FMT_RETRY(result, FMT_POSIX_CALL(read(fd_, buffer, convert_rwcount(count))));
   if (result < 0) FMT_THROW(system_error(errno, "cannot read from file"));
   return detail::to_unsigned(result);
 }
 
 std::size_t file::write(const void* buffer, std::size_t count) {
-  rwresult result = 0;
+  RWResult result = 0;
   FMT_RETRY(result, FMT_POSIX_CALL(write(fd_, buffer, convert_rwcount(count))));
   if (result < 0) FMT_THROW(system_error(errno, "cannot write to file"));
   return detail::to_unsigned(result);
@@ -299,10 +260,10 @@ void file::dup2(int fd) {
   }
 }
 
-void file::dup2(int fd, std::error_code& ec) noexcept {
+void file::dup2(int fd, error_code& ec) FMT_NOEXCEPT {
   int result = 0;
   FMT_RETRY(result, FMT_POSIX_CALL(dup2(fd_, fd)));
-  if (result == -1) ec = std::error_code(errno, std::generic_category());
+  if (result == -1) ec = error_code(errno);
 }
 
 void file::pipe(file& read_end, file& write_end) {
