@@ -68,8 +68,12 @@ class TC_GAME_API SmartAI : public CreatureAI
         {
             _escortState &= ~escortState;
         }
+        void SetAutoAttack(bool on)
+        {
+            _canAutoAttack = on;
+        }
         void SetCombatMove(bool on, bool stopMoving = false);
-        bool CanCombatMove() const
+        bool CanCombatMove()
         {
             return _canCombatMove;
         }
@@ -264,6 +268,7 @@ class TC_GAME_API SmartAI : public CreatureAI
 
         bool _run;
         bool _evadeDisabled;
+        bool _canAutoAttack;
         bool _canCombatMove;
         uint32 _invincibilityHPLevel;
 

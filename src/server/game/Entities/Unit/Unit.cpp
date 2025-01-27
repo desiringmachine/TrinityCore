@@ -5555,14 +5555,8 @@ bool Unit::Attack(Unit* victim, bool meleeAttack)
 
     Creature* creature = ToCreature();
     // creatures cannot attack while evading
-    if (creature)
-    {
-        if (creature->IsInEvadeMode())
-            return false;
-
-        if (!creature->CanMelee())
-            meleeAttack = false;
-    }
+    if (creature && creature->IsInEvadeMode())
+        return false;
 
     // nobody can attack GM in GM-mode
     if (victim->GetTypeId() == TYPEID_PLAYER)
